@@ -1,0 +1,76 @@
+version: "2"
+linters:
+  default: all
+  disable:
+    - cyclop
+    - depguard
+    - dupl
+    - err113
+    - exhaustive
+    - exhaustruct
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - godox
+    - gomoddirectives
+    - gosec
+    - interfacebloat
+    - ireturn
+    - lll
+    - mnd
+    - nestif
+    - nonamedreturns
+    - nosprintfhostport
+    - paralleltest
+    - perfsprint
+    - tagliatelle
+    - testpackage
+    - varnamelen
+    - wrapcheck
+    - wsl
+  settings:
+    staticcheck:
+      checks:
+        - all
+        - -QF1008
+    goheader:
+      template: |-
+        Copyright 2026 Clastix Labs
+        SPDX-License-Identifier: Apache-2.0
+    revive:
+      rules:
+        - name: dot-imports
+          arguments:
+            - allowedPackages:
+                - github.com/onsi/ginkgo/v2
+                - github.com/onsi/gomega
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/clastix/go-controller-template/)
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

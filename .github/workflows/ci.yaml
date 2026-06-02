@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ "*" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  golangci-lint:
+    name: lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+      - name: Run golangci-lint
+        run: make lint
+  diff:
+    name: diff
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: make rbac
+      - name: Checking if generated manifests are not aligned
+        run: if [[ $(git diff | wc -l) -gt 0 ]]; then echo ">>> Untracked generated files have not been committed" && git --no-pager diff && exit 1; fi
+      - name: Checking if missing untracked files for generated manifests
+        run: test -z "$(git ls-files --others --exclude-standard 2> /dev/null)"
+      - name: Checking if source code is not formatted
+        run: test -z "$(git diff 2> /dev/null)"
+      - run: make helm-docs
+      - name: Checking if generated Helm Chart documentation files are not aligned
+        run: if [[ $(git diff | wc -l) -gt 0 ]]; then echo ">>> Untracked generated files have not been committed" && git --no-pager diff && exit 1; fi
+      - name: Checking if generated Helm Chart documentation generated untracked files
+        run: test -z "$(git ls-files --others --exclude-standard 2> /dev/null)"

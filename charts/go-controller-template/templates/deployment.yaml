@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "go-controller-template.fullname" . }}
+  labels:
+    {{- include "go-controller-template.labels" . | nindent 4 }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "go-controller-template.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "go-controller-template.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      serviceAccountName: {{ include "go-controller-template.serviceAccountName" . }}
+      containers:
+      - args:
+        - "--metrics-bind-address=:{{ .Values.metricsBindPort }}"
+        - "--health-probe-bind-address=:{{ .Values.healthProbeBindPort }}"
+        - --leader-elect
+        {{- with .Values.extraArgs }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: SERVICE_ACCOUNT
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.serviceAccountName
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        name: manager
+        ports:
+        - containerPort: {{ .Values.metricsBindPort }}
+          name: metrics
+          protocol: TCP
+        - containerPort: {{ .Values.healthProbeBindPort }}
+          name: healthcheck
+          protocol: TCP
+        {{- with .Values.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+      terminationGracePeriodSeconds: 10
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

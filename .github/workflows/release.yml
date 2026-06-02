@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: "ko: login"
+        run: |
+          make ko
+          ./bin/ko login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }} 
+
+      - name: "helm: login"
+        run: |
+          make helm
+          echo ${{ secrets.GITHUB_TOKEN }} | ./bin/helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build OCI and Push
+        run: make push
+
+      - name: Push Helm Chart as OCI artifact
+        run: make chart
