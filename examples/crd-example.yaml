@@ -1,0 +1,47 @@
+# Copyright 2026 SSM Annotation Resolver Authors
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: ssm-annotation-resolver.io/v1
+kind: SsmAnnotationResolverInfra
+metadata:
+  name: default
+  namespace: envoy-gateway-system
+spec:
+  # SQS queue name for SSM Parameter Store events
+  sqsQueueName: ssm-annotation-resolver-queue
+  
+  # Dead Letter Queue name for failed messages
+  dlqQueueName: ssm-annotation-resolver-dlq
+  
+  # EventBridge rule name
+  eventBridgeRuleName: ssm-parameter-store-changes
+  
+  # IAM role name for IRSA (IAM Roles for Service Accounts)
+  iamRoleName: ssm-annotation-resolver-role
+  
+  # AWS region where resources will be created
+  awsRegion: us-east-1
+  
+  # EKS OIDC Provider ARN for trust relationship
+  # Format: arn:aws:iam::ACCOUNT_ID:oidc-provider/oidc.eks.REGION.amazonaws.com/id/EXAMPLED539D4633E53DE1B716D3041E
+  oidcProviderArn: arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLEID
+  
+  # Kubernetes ServiceAccount name (optional, defaults to ssm-annotation-resolver)
+  serviceAccountName: ssm-annotation-resolver
+
+---
+# After the controller provisions the infrastructure, check the status:
+# kubectl get ssminfra -n envoy-gateway-system -o yaml
+#
+# Expected status when ready:
+# status:
+#   phase: Ready
+#   outputs:
+#     sqsQueueUrl: https://sqs.us-east-1.amazonaws.com/123456789012/ssm-annotation-resolver-queue
+#     sqsQueueArn: arn:aws:sqs:us-east-1:123456789012:ssm-annotation-resolver-queue
+#     dlqQueueUrl: https://sqs.us-east-1.amazonaws.com/123456789012/ssm-annotation-resolver-dlq
+#     dlqQueueArn: arn:aws:sqs:us-east-1:123456789012:ssm-annotation-resolver-dlq
+#     iamRoleArn: arn:aws:iam::123456789012:role/ssm-annotation-resolver-role
+#     eventBridgeRuleArn: arn:aws:events:us-east-1:123456789012:rule/ssm-parameter-store-changes
+#   message: Infrastructure provisioned successfully
+#   lastUpdateTime: "2026-08-06T01:30:00Z"

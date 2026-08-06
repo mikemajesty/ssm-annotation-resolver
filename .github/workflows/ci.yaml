@@ -7,8 +7,8 @@ on:
     branches: [ "*" ]
 
 jobs:
-  golangci-lint:
-    name: lint
+  lint-and-test:
+    name: lint-and-test
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -18,6 +18,8 @@ jobs:
           go-version-file: go.mod
       - name: Run golangci-lint
         run: make lint
+      - name: Run tests
+        run: make test
   diff:
     name: diff
     runs-on: ubuntu-22.04
@@ -35,8 +37,5 @@ jobs:
         run: test -z "$(git ls-files --others --exclude-standard 2> /dev/null)"
       - name: Checking if source code is not formatted
         run: test -z "$(git diff 2> /dev/null)"
-      - run: make helm-docs
-      - name: Checking if generated Helm Chart documentation files are not aligned
-        run: if [[ $(git diff | wc -l) -gt 0 ]]; then echo ">>> Untracked generated files have not been committed" && git --no-pager diff && exit 1; fi
-      - name: Checking if generated Helm Chart documentation generated untracked files
-        run: test -z "$(git ls-files --others --exclude-standard 2> /dev/null)"
+      - name: Render chart
+        run: make render >/dev/null

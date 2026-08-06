@@ -1,0 +1,18 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ssm-annotation-resolver.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ssm-annotation-resolver.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: https-webhook
+      port: {{ .Values.webhook.servicePort }}
+      targetPort: webhook
+      protocol: TCP
+  selector:
+    {{- include "ssm-annotation-resolver.selectorLabels" . | nindent 4 }}
+{{- end }}

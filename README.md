@@ -1,143 +1,279 @@
-# go-controller-template
+# SSM Annotation Resolver
 
-A CLASTIX template for building Kubernetes controllers in Go with
-[controller-runtime](https://github.com/kubernetes-sigs/controller-runtime),
-packaged and shipped with [ko](https://ko.build) and a Helm chart.
+Mutating admission webhook + controller that resolves Kubernetes annotation
+values in the format `#:ssm:/path/to/parameter` using AWS SSM Parameter Store.
 
-Use it as a starting point: clone it, rename the placeholders to your project,
-and start adding your reconcilers.
+## Context
 
-## What you get
+This project exists to solve a GitOps/runtime gap: some infrastructure values are
+only known in AWS at runtime (for example, values produced by other stacks), but
+Kubernetes manifests still need those values before persistence.
 
-- A `main.go` wired with a controller-runtime manager (metrics, health/ready
-  probes, leader election).
-- Build & release tooling via `ko` and a `Makefile`.
-- A Helm chart under `charts/` (Deployment, RBAC, ServiceAccount, leader
-  election role).
-- RBAC generation from kubebuilder markers (`make rbac`).
-- Linting with `golangci-lint` and a SPDX license header check.
-- GitHub Actions for CI and release (image + chart published to `ghcr.io`).
+Instead of hardcoding sensitive/dynamic values in Git, resources can use
+`#:ssm:/path/to/parameter` placeholders in annotations. The webhook resolves them
+at admission time, and the controller re-triggers resources when the source SSM
+parameter changes.
 
-## Getting started: rename the template
+## How it works
 
-The template uses two placeholders throughout the repository. Replace both with
-your own values:
+1. Argo CD (or kubectl) applies a resource with a placeholder annotation.
+2. The webhook intercepts CREATE/UPDATE, fetches SSM values, and patches the
+   resource before persistence.
+3. The controller:
+   - retries unresolved placeholders found in the cluster on startup;
+   - consumes EventBridge -> SQS events for SSM changes and re-triggers affected
+     resources.
 
-| Placeholder | Meaning | Replace with |
-| --- | --- | --- |
-| `go-controller-template` | the project / module / chart name | your project name, e.g. `my-controller` |
+No in-memory cache is used; values are resolved directly from SSM.
 
-### 1. Go module path
+## Project layout
 
-**`go.mod`** — line 1:
+- `main.go`: app bootstrap (manager, webhook, runner).
+- `pkg/resolver/`: webhook + SSM resolver.
+- `pkg/reconciler/`: SQS-driven reconciliation loop.
+- `charts/ssm-annotation-resolver/`: Helm chart.
 
-```
-module github.com/clastix/go-controller-template
-```
+## Required AWS permissions (IRSA role)
 
-Change to `github.com/clastix/<your-project>`. Then update the import in
-**`main.go`**:
+- `ssm:GetParameter`
+- `ssm:GetParameters`
+- `sqs:ReceiveMessage`
+- `sqs:DeleteMessage`
+- `sqs:GetQueueAttributes`
 
-```go
-"github.com/clastix/go-controller-template/pkg"
-```
+## Local validation
 
-> Tip: run `go mod edit -module github.com/clastix/<your-project>` and then
-> fix the imports, or do a project-wide find & replace.
-
-### 2. main.go
-
-In **`main.go`**, change the leader-election ID so it is unique to your
-controller:
-
-```go
-LeaderElectionID: "go-controller-template.clastix.io",
+```bash
+go test ./...
+make rbac
+./bin/helm template ssm-annotation-resolver ./charts/ssm-annotation-resolver
 ```
 
-This is also where you register your reconcilers — see the commented
-`Add your controllers logic here:` block.
+## Release flow
 
-### 3. Makefile
+- Build/push image with `make push`
+- Package/push chart with `make chart`
 
-In **`Makefile`**:
+Default registries are defined in `Makefile`.
 
-- `CONTAINER_REPOSITORY ?= ghcr.io/clastix/$(MODULE_NAME)` — change `clastix` to
-  your registry namespace.
-- `KO_LD_FLAGS ?= "-X github.com/clastix/$(MODULE_NAME)/pkg.GitTag=$(VERSION)"`
-  — change `clastix` to match your module path.
-- The `chart` target pushes to `oci://ghcr.io/clastix/charts` — change to your
-  charts registry.
+## Integration with Foundation/GitOps
 
-`MODULE_NAME` is derived automatically from the last path segment of your
-`go.mod` module, so renaming the module updates most targets for free.
+### Using the SsmAnnotationResolverInfra CRD (Recommended)
 
-### 4. .ko.yaml
+The **SsmAnnotationResolverInfra CRD** is the declarative way to provision AWS infrastructure (SQS, EventBridge, IAM) directly from Kubernetes.
 
-In **`.ko.yaml`**, rename the build `id`:
+**Flow:**
+1. Pulumi creates a `SsmAnnotationResolverInfra` custom resource in the cluster
+2. The SSM Annotation Resolver controller observes the CRD
+3. Controller automatically provisions SQS queue, DLQ, EventBridge rule, and IAM role
+4. Controller updates the CRD status with outputs (sqsQueueUrl, iamRoleArn, etc.)
+5. Pulumi reads the status and uses outputs for Helm chart or other deployments
 
+**Example CRD:**
 ```yaml
-builds:
-  - id: go-controller-template
+apiVersion: ssm-annotation-resolver.io/v1
+kind: SsmAnnotationResolverInfra
+metadata:
+  name: default
+  namespace: envoy-gateway-system
+spec:
+  sqsQueueName: ssm-annotation-resolver-queue
+  dlqQueueName: ssm-annotation-resolver-dlq
+  eventBridgeRuleName: ssm-parameter-store-changes
+  iamRoleName: ssm-annotation-resolver-role
+  awsRegion: us-east-1
+  oidcProviderArn: arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLEID
+  serviceAccountName: ssm-annotation-resolver
 ```
 
-### 5. .golangci.yml
-
-In **`.golangci.yml`**:
-
-- `gci.sections.prefix(github.com/clastix/go-controller-template/)` — update to
-  your module path so imports are grouped correctly.
-- `goheader.template` — change `Clastix Labs` to your own copyright holder. Also
-  update the header in `main.go` and `pkg/version.go` to match.
-
-### 6. Helm chart
-
-Rename the chart directory `charts/go-controller-template/` to
-`charts/<your-project>/`, then update the contents:
-
-- **`Chart.yaml`** — `name` and `description`.
-- **`values.yaml`** — `image.repository` (`ghcr.io/clastix/go-controller-template`).
-- **`templates/_helpers.tpl`** — every `go-controller-template.*` template
-  name (`.name`, `.fullname`, `.chart`, `.labels`, `.selectorLabels`,
-  `.serviceAccountName`).
-- **`templates/*.yaml`** — the `include "go-controller-template.*"` references
-  and the hardcoded resource names in `rbac.yaml` / `rbac_election.yaml`
-  (e.g. `go-controller-template-role`).
-
-> Tip: the template names in `_helpers.tpl` and the `include` calls must match
-> exactly, so a directory-wide find & replace of `go-controller-template` is the
-> safest approach.
-
-### 7. GitHub Actions
-
-In **`.github/workflows/`** the release workflow logs into `ghcr.io` and pushes
-under CLASTIX org automatically (`github.actor` / `GITHUB_TOKEN`), so no edits are usually needed —
-but double-check GitHub organisations permissions for packages.
-
-## Quick find & replace
-
-A one-shot starting point (review the diff afterwards):
-
-```sh
-grep -rl --exclude-dir=.git -e go-controller-template -e clastix . \
-  | xargs sed -i 's/go-controller-template/<your-project>/g'
-
-git mv charts/go-controller-template charts/<your-project>
+**Monitor provisioning:**
+```bash
+kubectl get ssminfra -n envoy-gateway-system -o wide
+kubectl describe ssminfra default -n envoy-gateway-system
 ```
 
-Then update copyright holders (`Clastix Labs`) separately, since you likely want
-your own organisation name there rather than `<your-org>`.
+**Advantages:**
+- ✅ GitOps native (CRD in git, declarative)
+- ✅ Durability (CRD in etcd, survives failures)
+- ✅ Observable (kubectl commands, status updates)
+- ✅ Self-healing (controller retries on failure)
+- ✅ Encapsulation (no need to understand SQS/IAM details)
 
-## Development
+### Architecture Flow
 
-```sh
-make help     # list available targets
-make lint     # run golangci-lint
-make rbac     # regenerate chart RBAC from kubebuilder markers
-make build    # build a local image with ko
-make push     # build and push the image
-make chart    # package and push the Helm chart
+```
+Foundation (Pulumi)
+  ├─ Creates: SSM Parameter (e.g., /boilerplate/dev/infra/envoy-nlb-sg-id)
+  ├─ Creates: SsmAnnotationResolverInfra CRD (in cluster)
+  └─ Waits for: CRD status.phase == "Ready"
+
+SsmAnnotationResolverInfra Controller (in-cluster)
+  ├─ Observes CRD creation
+  ├─ Provisions: SQS Queue + DLQ
+  ├─ Provisions: EventBridge Rule
+  ├─ Provisions: IAM Role (IRSA)
+  └─ Updates: CRD status with outputs (sqsQueueUrl, iamRoleArn, etc.)
+
+Pulumi continues
+  ├─ Reads: CRD status outputs
+  ├─ Deploys: Helm chart with SQS queue URL
+  └─ Exports: Outputs for other stacks
+
+GitOps Kubernetes Manifests
+  ├─ Reference SSM Parameters in annotations
+  │  (e.g., annotation-key: #:ssm:/path/to/parameter)
+  └─ Deployed to cluster via Argo CD
+
+SSM Annotation Resolver Webhook (in-cluster)
+  ├─ Intercepts resource creation/update
+  ├─ Resolves #:ssm:... placeholders from SSM Parameter Store (real-time)
+  ├─ Patches resource with resolved values before persistence
+  └─ Tracks sources for event-driven re-resolution
+
+SSM Annotation Resolver Reconciler (in-cluster)
+  ├─ Consumes EventBridge -> SQS events for parameter changes
+  ├─ Re-resolves affected resources automatically
+  └─ Handles DLQ for failed messages
 ```
 
-## License
+### Example: Private Origin Envoy Proxy
 
-Apache-2.0. Update the headers and this section to reflect your own project.
+**Foundation step 1: Create SSM parameter for NLB security group**
+```typescript
+// IaC/foundation/src/network/network-nlb-parameter-store.ts
+// Writes to SSM: /boilerplate/dev/infra/envoy-nlb-sg-id = sg-xxxxx
+```
+
+**Foundation step 2: Create infrastructure via CRD**
+```typescript
+// IaC/foundation/index.ts (using Pulumi Kubernetes provider)
+const infraConfig = new k8s.apiextensions.CustomResource('ssm-resolver-infra', {
+  apiVersion: 'ssm-annotation-resolver.io/v1',
+  kind: 'SsmAnnotationResolverInfra',
+  metadata: {
+    name: 'default',
+    namespace: 'envoy-gateway-system'
+  },
+  spec: {
+    sqsQueueName: 'ssm-annotation-resolver-queue',
+    dlqQueueName: 'ssm-annotation-resolver-dlq',
+    eventBridgeRuleName: 'ssm-parameter-store-changes',
+    iamRoleName: 'ssm-annotation-resolver-role',
+    awsRegion: 'us-east-1',
+    oidcProviderArn: eksOidcProvider.oidcProviderArn
+  }
+}, { provider: workloadK8sProvider })
+
+// Pulumi waits for CRD to be ready, then reads outputs
+const sqsQueueUrl = infraConfig.status.outputs.sqsQueueUrl
+const iamRoleArn = infraConfig.status.outputs.iamRoleArn
+
+// Deploy Helm chart with outputs
+const chart = new k8s.helm.v3.Chart('ssm-resolver', {
+  chart: 'ssm-annotation-resolver',
+  values: {
+    sqs: {
+      queueURL: sqsQueueUrl
+    },
+    irsa: {
+      enabled: true,
+      roleArn: iamRoleArn
+    }
+  }
+})
+```
+
+**GitOps step 3: Deploy resource with placeholders**
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: private-origin-envoy
+  namespace: envoy-gateway-system
+  annotations:
+    ssm-annotation-resolver.io/enabled: "true"
+    # Webhook resolves #:ssm: to value from SSM Parameter Store
+    envoy-nlb-sg-id: "#:ssm:/boilerplate/dev/infra/envoy-nlb-sg-id"
+data:
+  config.yaml: |
+    upstream:
+      securityGroupId: value-will-be-resolved-from-ssm
+```
+
+**When SSM parameter changes:**
+1. EventBridge detects SSM change
+2. Sends event to SQS queue
+3. Reconciler receives SQS message
+4. Updates resource with new SSM value
+
+## Installation
+1. Foundation updates SSM parameter `/boilerplate/dev/infra/envoy-nlb-sg-id` → new value `sg-67890`
+2. EventBridge publishes event to SQS queue
+3. ssm-annotation-resolver reconciler receives event, extracts parameter path
+4. Reconciler finds all resources with this parameter in their `sources` annotation
+5. Patches resource with `ssm-annotation-resolver.io/reconcile-at: <timestamp>`
+6. Kubernetes detects resource change, triggers webhook again
+7. Webhook re-resolves parameter → calls SSM GetParameter → retrieves updated `sg-67890`
+8. Resource updated to new value ✅
+
+## Operational runbook
+
+### Expected SSM change event shape (via EventBridge -> SQS)
+
+The reconciler reads the parameter path from one of these fields:
+
+- `detail.name`
+- `detail.requestParameters.name`
+
+Example payloads:
+
+```json
+{
+  "source": "aws.ssm",
+  "detail-type": "Parameter Store Change",
+  "detail": {
+    "name": "/my/app/config/value"
+  }
+}
+```
+
+```json
+{
+  "detail": {
+    "requestParameters": {
+      "name": "/my/app/config/value"
+    }
+  }
+}
+```
+
+### Queue and DLQ recommendations
+
+- Configure `sqs.queueURL` in chart values.
+- Use a DLQ with `maxReceiveCount` > 1 to retain poison messages.
+- Enable CloudWatch alarms for:
+  - messages visible in the main queue above expected baseline;
+  - messages visible in the DLQ (> 0 should alert).
+- Keep EventBridge rule scope limited to Parameter Store change events only.
+
+### Troubleshooting unresolved placeholders
+
+1. Confirm the resource still contains placeholder annotations (`#:ssm:/...`).
+2. Confirm controller logs for:
+   - `failed to resolve SSM parameter for annotation` (webhook path);
+   - `unable to parse parameter path from SQS message` (event shape issue).
+3. Validate IAM/IRSA permissions:
+   - `ssm:GetParameter`, `ssm:GetParameters`,
+   - `sqs:ReceiveMessage`, `sqs:DeleteMessage`, `sqs:GetQueueAttributes`.
+4. Check the SSM parameter exists in the configured region (`aws.region` / `AWS_REGION`).
+5. Validate webhook health and TLS/cert-manager resources.
+6. If event-driven refresh is not happening, inspect SQS message body format and DLQ.
+
+## Suggested improvements
+
+- Add cluster-level e2e validation (envtest or real cluster) to assert webhook
+  registration, admission patches, and reconcile touch behavior end-to-end.
+- Review webhook scope (`apiGroups/resources = '*'`) and narrow it where possible
+  to reduce blast radius and unnecessary admission traffic.
+- Re-evaluate `webhook.failurePolicy` (`Fail` by default in chart) based on
+  environment criticality and failure tolerance.

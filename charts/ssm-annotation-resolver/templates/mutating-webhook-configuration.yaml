@@ -1,0 +1,44 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "ssm-annotation-resolver.fullname" . }}-mutating-webhook
+  labels:
+    {{- include "ssm-annotation-resolver.labels" . | nindent 4 }}
+  {{- if .Values.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "ssm-annotation-resolver.fullname" . }}-webhook-certificate
+  {{- end }}
+webhooks:
+  - name: {{ include "ssm-annotation-resolver.fullname" . }}.ssm-annotation-resolver.io
+    admissionReviewVersions:
+      - v1
+    sideEffects: None
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    matchPolicy: Equivalent
+    reinvocationPolicy: IfNeeded
+    rules:
+      - operations:
+          - CREATE
+          - UPDATE
+        apiGroups:
+          {{- range .Values.webhook.rules.apiGroups }}
+          - {{ . | quote }}
+          {{- end }}
+        apiVersions:
+          {{- range .Values.webhook.rules.apiVersions }}
+          - {{ . | quote }}
+          {{- end }}
+        resources:
+          {{- range .Values.webhook.rules.resources }}
+          - {{ . | quote }}
+          {{- end }}
+        scope: {{ .Values.webhook.rules.scope | quote }}
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace }}
+        name: {{ include "ssm-annotation-resolver.fullname" . }}
+        path: {{ .Values.webhook.path }}
+        port: {{ .Values.webhook.servicePort }}
+{{- end }}

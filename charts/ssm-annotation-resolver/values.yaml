@@ -1,4 +1,4 @@
-# Default values for go-controller-template.
+# Default values for ssm-annotation-resolver.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -7,7 +7,7 @@ replicaCount: 1
 
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
-  repository: ghcr.io/clastix/go-controller-template
+  repository: ghcr.io/mikemajesty/ssm-annotation-resolver
   # This sets the pull policy for images.
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
@@ -27,6 +27,8 @@ serviceAccount:
   automount: true
   # Annotations to add to the service account.
   annotations: {}
+    # Example IRSA annotation (set when using SsmAnnotationResolverInfra CRD):
+    # eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/ssm-annotation-resolver-role
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template.
   name: ""
@@ -34,6 +36,9 @@ serviceAccount:
 # This is for setting Kubernetes Annotations to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 podAnnotations: {}
+
+# Extra environment variables for the controller container.
+extraEnv: []
 
 podSecurityContext: {}
   # fsGroup: 2000
@@ -82,3 +87,45 @@ metricsBindPort: 8080
 
 # -- The address the probe endpoint binds to. (default 8081)
 healthProbeBindPort: 8081
+
+webhook:
+  enabled: true
+  port: 9443
+  certDir: /tmp/k8s-webhook-server/serving-certs
+  path: /mutate
+  failurePolicy: Fail
+  timeoutSeconds: 10
+  servicePort: 443
+  rules:
+    apiGroups:
+      - '*'
+    apiVersions:
+      - '*'
+    resources:
+      - '*'
+    scope: Namespaced
+
+certManager:
+  enabled: true
+  issuerRef:
+    kind: ClusterIssuer
+    name: your-cluster-issuer
+  duration: 2160h
+  renewBefore: 360h
+
+aws:
+  region: ""
+  ssmWithDecryption: true
+
+sqs:
+  queueURL: ""
+  waitTimeSeconds: 20
+  maxMessages: 10
+
+# -- IRSA (IAM Roles for Service Accounts) configuration
+# Set when using the SsmAnnotationResolverInfra CRD to auto-provision AWS infrastructure
+irsa:
+  # -- Whether to enable IRSA
+  enabled: false
+  # -- IAM Role ARN to bind to the service account
+  roleArn: ""

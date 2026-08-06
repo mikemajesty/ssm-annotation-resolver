@@ -36,7 +36,7 @@ linters:
         - -QF1008
     goheader:
       template: |-
-        Copyright 2026 Clastix Labs
+        Copyright 2026 SSM Annotation Resolver Authors
         SPDX-License-Identifier: Apache-2.0
     revive:
       rules:
@@ -67,7 +67,7 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/clastix/go-controller-template/)
+        - prefix(github.com/mikemajesty/ssm-annotation-resolver/)
   exclusions:
     generated: lax
     paths:

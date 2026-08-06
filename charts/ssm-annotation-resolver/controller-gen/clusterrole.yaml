@@ -1,0 +1,9 @@
+- apiGroups:
+    - '*'
+  resources:
+    - '*'
+  verbs:
+    - get
+    - list
+    - patch
+    - watch

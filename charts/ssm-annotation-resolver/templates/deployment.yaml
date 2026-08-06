@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "go-controller-template.fullname" . }}
+  name: {{ include "ssm-annotation-resolver.fullname" . }}
   labels:
-    {{- include "go-controller-template.labels" . | nindent 4 }}
+    {{- include "ssm-annotation-resolver.labels" . | nindent 4 }}
   namespace: {{ .Release.Namespace }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "go-controller-template.selectorLabels" . | nindent 6 }}
+      {{- include "ssm-annotation-resolver.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -17,20 +17,30 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "go-controller-template.selectorLabels" . | nindent 8 }}
+        {{- include "ssm-annotation-resolver.selectorLabels" . | nindent 8 }}
     spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      serviceAccountName: {{ include "go-controller-template.serviceAccountName" . }}
+      serviceAccountName: {{ include "ssm-annotation-resolver.serviceAccountName" . }}
       containers:
       - args:
         - "--metrics-bind-address=:{{ .Values.metricsBindPort }}"
         - "--health-probe-bind-address=:{{ .Values.healthProbeBindPort }}"
+        - "--webhook-port={{ .Values.webhook.port }}"
+        - "--webhook-cert-dir={{ .Values.webhook.certDir }}"
+        - "--ssm-with-decryption={{ .Values.aws.ssmWithDecryption }}"
+        - "--sqs-queue-url={{ .Values.sqs.queueURL }}"
+        - "--sqs-wait-time-seconds={{ .Values.sqs.waitTimeSeconds }}"
+        - "--sqs-max-messages={{ .Values.sqs.maxMessages }}"
         - --leader-elect
         {{- with .Values.extraArgs }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
         env:
+          {{- if .Values.aws.region }}
+          - name: AWS_REGION
+            value: {{ .Values.aws.region | quote }}
+          {{- end }}
           - name: POD_NAMESPACE
             valueFrom:
               fieldRef:
@@ -39,6 +49,9 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: spec.serviceAccountName
+          {{- with .Values.extraEnv }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         name: manager
@@ -49,15 +62,36 @@ spec:
         - containerPort: {{ .Values.healthProbeBindPort }}
           name: healthcheck
           protocol: TCP
+        {{- if .Values.webhook.enabled }}
+        - containerPort: {{ .Values.webhook.port }}
+          name: webhook
+          protocol: TCP
+        {{- end }}
         {{- with .Values.readinessProbe }}
         readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.livenessProbe }}
+        livenessProbe:
           {{- toYaml . | nindent 10 }}
         {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 12 }}
+        {{- if and .Values.webhook.enabled .Values.certManager.enabled }}
+        volumeMounts:
+          - name: webhook-certs
+            mountPath: {{ .Values.webhook.certDir }}
+            readOnly: true
+        {{- end }}
       terminationGracePeriodSeconds: 10
+      {{- if and .Values.webhook.enabled .Values.certManager.enabled }}
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: {{ include "ssm-annotation-resolver.fullname" . }}-webhook-certs
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

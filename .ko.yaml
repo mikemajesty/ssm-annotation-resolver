@@ -3,7 +3,7 @@ defaultPlatforms:
   - linux/amd64
   - linux/arm
 builds:
-  - id: go-controller-template
+  - id: ssm-annotation-resolver
     main: .
     ldflags:
       - '{{ if index .Env "LD_FLAGS" }}{{ .Env.LD_FLAGS }}{{ end }}'

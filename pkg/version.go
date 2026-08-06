@@ -1,4 +1,4 @@
-// Copyright 2026 Clastix Labs
+// Copyright 2026 SSM Annotation Resolver Authors
 // SPDX-License-Identifier: Apache-2.0
 
 package pkg
