@@ -281,4 +281,4 @@ Example payloads:
 ## CRD usage guide
 
 For complete usage details (prerequisites, install, apply, status, and Pulumi/GitOps integration), see
-[crd-usage.md](/Users/mike.lima/Documents/Pessoal/ssm-annotation-resolver/docs/crd-usage.md).
+[crd-usage.md](/Users/mike.lima/Documents/Pessoal/ssm-annotation-resolver/docs/crd-usage.md).# ssm-annotation-resolver
