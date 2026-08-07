@@ -60,14 +60,15 @@ Default registries are defined in `Makefile`.
 
 ### Using the SsmAnnotationResolverInfra CRD (Recommended)
 
-The **SsmAnnotationResolverInfra CRD** is the declarative way to provision AWS infrastructure (SQS, EventBridge, IAM) directly from Kubernetes.
+The **SsmAnnotationResolverInfra CRD** is the declarative way to provision AWS infrastructure (SQS, DLQ, IAM/IRSA) directly from Kubernetes.
 
 **Flow:**
 1. Pulumi creates a `SsmAnnotationResolverInfra` custom resource in the cluster
 2. The SSM Annotation Resolver controller observes the CRD
-3. Controller automatically provisions SQS queue, DLQ, EventBridge rule, and IAM role
+3. Controller automatically provisions SQS queue, DLQ, and IAM role
 4. Controller updates the CRD status with outputs (sqsQueueUrl, iamRoleArn, etc.)
 5. Pulumi reads the status and uses outputs for Helm chart or other deployments
+6. EventBridge rule/target is configured externally (IaC or CLI) and points to the queue created by the CRD
 
 **Example CRD:**
 ```yaml
@@ -110,7 +111,6 @@ Foundation (Pulumi)
 SsmAnnotationResolverInfra Controller (in-cluster)
   ├─ Observes CRD creation
   ├─ Provisions: SQS Queue + DLQ
-  ├─ Provisions: EventBridge Rule
   ├─ Provisions: IAM Role (IRSA)
   └─ Updates: CRD status with outputs (sqsQueueUrl, iamRoleArn, etc.)
 
@@ -277,3 +277,8 @@ Example payloads:
   to reduce blast radius and unnecessary admission traffic.
 - Re-evaluate `webhook.failurePolicy` (`Fail` by default in chart) based on
   environment criticality and failure tolerance.
+
+## CRD usage guide
+
+For complete usage details (prerequisites, install, apply, status, and Pulumi/GitOps integration), see
+[crd-usage.md](/Users/mike.lima/Documents/Pessoal/ssm-annotation-resolver/docs/crd-usage.md).
