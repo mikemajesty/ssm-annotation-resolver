@@ -1,0 +1,83 @@
+name: Create Release Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch_from:
+        description: Source branch for the tag
+        type: string
+        required: true
+        default: master
+      version:
+        description: Semantic version to tag (for example 0.1.0 or v0.1.0)
+        type: string
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  create-release-tag:
+    name: Create Release Tag
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.inputs.branch_from }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and Push Tag
+        id: create_tag
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          BRANCH_FROM: ${{ github.event.inputs.branch_from }}
+        run: |
+          TAG_NAME="${INPUT_VERSION}"
+          if [[ "${TAG_NAME}" != v* ]]; then
+            TAG_NAME="v${TAG_NAME}"
+          fi
+
+          if ! [[ "${TAG_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid tag format: ${TAG_NAME}"
+            exit 1
+          fi
+
+          git fetch origin --tags
+
+          if git rev-parse "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Tag ${TAG_NAME} already exists locally or on origin"
+            exit 1
+          fi
+
+          TARGET_SHA="$(git rev-parse HEAD)"
+          git tag -a "${TAG_NAME}" "${TARGET_SHA}" -m "Release ${TAG_NAME}"
+          git push origin "refs/tags/${TAG_NAME}"
+
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "target_sha=${TARGET_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Workflow Summary
+        env:
+          TAG_NAME: ${{ steps.create_tag.outputs.tag_name }}
+          TARGET_SHA: ${{ steps.create_tag.outputs.target_sha }}
+          BRANCH_FROM: ${{ github.event.inputs.branch_from }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## Tag created successfully
+
+          | Property | Value |
+          |---|---|
+          | Tag | \`${TAG_NAME}\` |
+          | Branch | \`${BRANCH_FROM}\` |
+          | Commit | \`${TARGET_SHA}\` |
+
+          This tag push should trigger the release workflow if it listens to \`v*\`.
+          EOF
