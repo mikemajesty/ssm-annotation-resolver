@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "ssm-annotation-resolver.fullname" . }}-leader-election-role
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "ssm-annotation-resolver.namespace" . }}
   labels:
     {{- include "ssm-annotation-resolver.labels" . | nindent 4 }}
 rules:
@@ -42,7 +42,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "ssm-annotation-resolver.fullname" . }}-leader-election-rolebinding
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "ssm-annotation-resolver.namespace" . }}
   labels:
     {{- include "ssm-annotation-resolver.labels" . | nindent 4 }}
 roleRef:
@@ -52,4 +52,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "ssm-annotation-resolver.serviceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ include "ssm-annotation-resolver.namespace" . }}

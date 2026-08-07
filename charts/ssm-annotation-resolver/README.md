@@ -5,9 +5,11 @@ Helm chart for deploying the SSM Annotation Resolver webhook/controller.
 ## Key values
 
 - `image.repository`: controller image
+- `namespace.name`: target namespace for namespaced resources (defaults to Helm release namespace)
+- `namespace.create`: create target namespace when `true`
 - `serviceAccount.annotations`: use this for IRSA role ARN
 - `aws.region`: AWS region override
 - `sqs.queueURL`: queue with Parameter Store change events
-- `webhook.failurePolicy`: defaults to `Fail`
-- `webhook.rules.scope`: defaults to `Namespaced` (use `*` if you need cluster-scoped resources)
+- `webhook.failurePolicy`: defaults to `Ignore` for bootstrap safety
+- `webhook.rules.*`: defaults to `gateway.envoyproxy.io/envoyproxies` scope to avoid intercepting unrelated resources
 - `certManager.issuerRef.*`: issuer used for webhook TLS certificate

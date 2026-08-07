@@ -61,3 +61,10 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Resolve target namespace for namespaced resources.
+*/}}
+{{- define "ssm-annotation-resolver.namespace" -}}
+{{- default .Release.Namespace .Values.namespace.name -}}
+{{- end }}

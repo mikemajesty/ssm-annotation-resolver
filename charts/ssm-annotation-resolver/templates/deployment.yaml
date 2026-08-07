@@ -4,7 +4,7 @@ metadata:
   name: {{ include "ssm-annotation-resolver.fullname" . }}
   labels:
     {{- include "ssm-annotation-resolver.labels" . | nindent 4 }}
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "ssm-annotation-resolver.namespace" . }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:

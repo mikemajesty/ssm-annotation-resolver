@@ -7,7 +7,7 @@ metadata:
     {{- include "ssm-annotation-resolver.labels" . | nindent 4 }}
   {{- if .Values.certManager.enabled }}
   annotations:
-    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "ssm-annotation-resolver.fullname" . }}-webhook-certificate
+    cert-manager.io/inject-ca-from: {{ include "ssm-annotation-resolver.namespace" . }}/{{ include "ssm-annotation-resolver.fullname" . }}-webhook-certificate
   {{- end }}
 webhooks:
   - name: {{ include "ssm-annotation-resolver.fullname" . }}.ssm-annotation-resolver.io
@@ -18,10 +18,19 @@ webhooks:
     timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
     matchPolicy: Equivalent
     reinvocationPolicy: IfNeeded
+    {{- with .Values.webhook.namespaceSelector }}
+    namespaceSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with .Values.webhook.objectSelector }}
+    objectSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
     rules:
       - operations:
-          - CREATE
-          - UPDATE
+          {{- range .Values.webhook.rules.operations }}
+          - {{ . | quote }}
+          {{- end }}
         apiGroups:
           {{- range .Values.webhook.rules.apiGroups }}
           - {{ . | quote }}
@@ -37,7 +46,7 @@ webhooks:
         scope: {{ .Values.webhook.rules.scope | quote }}
     clientConfig:
       service:
-        namespace: {{ .Release.Namespace }}
+        namespace: {{ include "ssm-annotation-resolver.namespace" . }}
         name: {{ include "ssm-annotation-resolver.fullname" . }}
         path: {{ .Values.webhook.path }}
         port: {{ .Values.webhook.servicePort }}

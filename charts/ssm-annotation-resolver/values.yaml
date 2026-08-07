@@ -19,6 +19,13 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
+# Namespace configuration for namespaced resources managed by this chart.
+namespace:
+  # Target namespace. When empty, uses Helm .Release.Namespace.
+  name: ""
+  # Creates the namespace resource when true.
+  create: false
+
 # This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
 serviceAccount:
   # Specifies whether a service account should be created.
@@ -93,16 +100,21 @@ webhook:
   port: 9443
   certDir: /tmp/k8s-webhook-server/serving-certs
   path: /mutate
-  failurePolicy: Fail
-  timeoutSeconds: 10
+  failurePolicy: Ignore
+  timeoutSeconds: 5
   servicePort: 443
+  namespaceSelector: {}
+  objectSelector: {}
   rules:
+    operations:
+      - CREATE
+      - UPDATE
     apiGroups:
-      - '*'
+      - gateway.envoyproxy.io
     apiVersions:
       - '*'
     resources:
-      - '*'
+      - envoyproxies
     scope: Namespaced
 
 certManager:

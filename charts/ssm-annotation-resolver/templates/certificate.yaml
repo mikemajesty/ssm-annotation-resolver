@@ -3,7 +3,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: {{ include "ssm-annotation-resolver.fullname" . }}-webhook-certificate
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ include "ssm-annotation-resolver.namespace" . }}
   labels:
     {{- include "ssm-annotation-resolver.labels" . | nindent 4 }}
 spec:
@@ -11,8 +11,8 @@ spec:
   duration: {{ .Values.certManager.duration }}
   renewBefore: {{ .Values.certManager.renewBefore }}
   dnsNames:
-    - {{ include "ssm-annotation-resolver.fullname" . }}.{{ .Release.Namespace }}.svc
-    - {{ include "ssm-annotation-resolver.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+    - {{ include "ssm-annotation-resolver.fullname" . }}.{{ include "ssm-annotation-resolver.namespace" . }}.svc
+    - {{ include "ssm-annotation-resolver.fullname" . }}.{{ include "ssm-annotation-resolver.namespace" . }}.svc.cluster.local
   issuerRef:
     kind: {{ .Values.certManager.issuerRef.kind }}
     name: {{ .Values.certManager.issuerRef.name }}
