@@ -7,7 +7,7 @@ on:
         description: Source branch for the tag
         type: string
         required: true
-        default: master
+        default: nain
       increment_type:
         description: Version increment type
         type: choice
