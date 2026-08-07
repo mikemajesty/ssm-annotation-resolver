@@ -102,5 +102,5 @@ jobs:
           | Increment | \`${INCREMENT_TYPE}\` |
           | Commit | \`${TARGET_SHA}\` |
 
-          This tag push should trigger the release workflow if it listens to \`v*\`.
+          Run the \`Release\` workflow manually and pass \`${TAG_NAME}\` in the \`tag\` input.
           EOF
