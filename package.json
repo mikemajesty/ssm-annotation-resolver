@@ -1,6 +1,6 @@
 {
   "name": "ssm-annotation-resolver",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Release metadata for the SSM Annotation Resolver project"
 }
